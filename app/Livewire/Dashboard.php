@@ -61,6 +61,110 @@ class Dashboard extends Component
             ->values();
     }
 
+    protected function categoryChartConfig(Collection $byCategory): array
+    {
+        $palette = ['#6366f1', '#0ea5e9', '#10b981', '#f59e0b', '#f43f5e', '#8b5cf6', '#14b8a6'];
+
+        return [
+            'type' => 'bar',
+            'data' => [
+                'labels' => $byCategory->map(fn ($row) => $row->category?->name ?? 'Uncategorized')->values(),
+                'datasets' => [[
+                    'label' => 'Assets',
+                    'data' => $byCategory->pluck('total')->values(),
+                    'backgroundColor' => $byCategory->values()->map(fn ($row, $i) => $palette[$i % count($palette)])->all(),
+                    'borderRadius' => 6,
+                    'maxBarThickness' => 36,
+                ]],
+            ],
+            'options' => [
+                'responsive' => true,
+                'maintainAspectRatio' => false,
+                'plugins' => ['legend' => ['display' => false]],
+                'scales' => [
+                    'y' => ['beginAtZero' => true, 'ticks' => ['precision' => 0]],
+                ],
+            ],
+        ];
+    }
+
+    protected function statusChartConfig(Collection $statusBreakdown): array
+    {
+        $colorMap = [
+            'available' => '#22c55e',
+            'assigned' => '#6366f1',
+            'in_maintenance' => '#f59e0b',
+            'retired' => '#9ca3af',
+            'disposed' => '#f87171',
+        ];
+
+        return [
+            'type' => 'doughnut',
+            'data' => [
+                'labels' => $statusBreakdown->pluck('label')->values(),
+                'datasets' => [[
+                    'data' => $statusBreakdown->pluck('total')->values(),
+                    'backgroundColor' => $statusBreakdown->map(fn ($row) => $colorMap[$row['key']] ?? '#9ca3af')->values(),
+                    'borderWidth' => 2,
+                    'borderColor' => '#ffffff',
+                ]],
+            ],
+            'options' => [
+                'responsive' => true,
+                'maintainAspectRatio' => false,
+                'cutout' => '65%',
+                'plugins' => [
+                    'legend' => ['position' => 'bottom', 'labels' => ['boxWidth' => 10, 'padding' => 14]],
+                ],
+            ],
+        ];
+    }
+
+    protected function activityTrendConfig(): array
+    {
+        $months = collect(range(5, 0))->map(fn ($i) => now()->subMonths($i)->startOfMonth());
+
+        $checkIns = $months->map(fn ($month) => AssetAssignment::whereBetween('assigned_at', [$month, $month->copy()->endOfMonth()])->count());
+        $checkOuts = $months->map(fn ($month) => AssetAssignment::whereBetween('returned_at', [$month, $month->copy()->endOfMonth()])->count());
+
+        return [
+            'type' => 'line',
+            'data' => [
+                'labels' => $months->map(fn ($month) => $month->format('M Y'))->values(),
+                'datasets' => [
+                    [
+                        'label' => 'Checked In',
+                        'data' => $checkIns->values(),
+                        'borderColor' => '#6366f1',
+                        'backgroundColor' => 'rgba(99, 102, 241, 0.12)',
+                        'tension' => 0.35,
+                        'fill' => true,
+                        'pointRadius' => 3,
+                    ],
+                    [
+                        'label' => 'Checked Out',
+                        'data' => $checkOuts->values(),
+                        'borderColor' => '#f59e0b',
+                        'backgroundColor' => 'rgba(245, 158, 11, 0.12)',
+                        'tension' => 0.35,
+                        'fill' => true,
+                        'pointRadius' => 3,
+                    ],
+                ],
+            ],
+            'options' => [
+                'responsive' => true,
+                'maintainAspectRatio' => false,
+                'plugins' => [
+                    'legend' => ['position' => 'bottom', 'labels' => ['boxWidth' => 10, 'padding' => 14]],
+                ],
+                'scales' => [
+                    'y' => ['beginAtZero' => true, 'ticks' => ['precision' => 0]],
+                ],
+            ],
+        ];
+    }
+
     public function render()
     {
         $assets = Asset::query();
@@ -81,14 +185,13 @@ class Dashboard extends Component
             ->groupBy('asset_category_id')
             ->orderByDesc('total')
             ->get();
-        $maxCategoryTotal = max(1, $byCategory->max('total') ?? 1);
 
         $statusBreakdown = collect([
-            ['key' => 'available', 'label' => 'Available', 'total' => $statusCounts['available'] ?? 0, 'color' => 'bg-green-500'],
-            ['key' => 'assigned', 'label' => 'Assigned', 'total' => $statusCounts['assigned'] ?? 0, 'color' => 'bg-indigo-500'],
-            ['key' => 'in_maintenance', 'label' => 'In Maintenance', 'total' => $statusCounts['in_maintenance'] ?? 0, 'color' => 'bg-amber-500'],
-            ['key' => 'retired', 'label' => 'Retired', 'total' => $statusCounts['retired'] ?? 0, 'color' => 'bg-gray-400'],
-            ['key' => 'disposed', 'label' => 'Disposed', 'total' => $statusCounts['disposed'] ?? 0, 'color' => 'bg-red-400'],
+            ['key' => 'available', 'label' => 'Available', 'total' => $statusCounts['available'] ?? 0],
+            ['key' => 'assigned', 'label' => 'Assigned', 'total' => $statusCounts['assigned'] ?? 0],
+            ['key' => 'in_maintenance', 'label' => 'In Maintenance', 'total' => $statusCounts['in_maintenance'] ?? 0],
+            ['key' => 'retired', 'label' => 'Retired', 'total' => $statusCounts['retired'] ?? 0],
+            ['key' => 'disposed', 'label' => 'Disposed', 'total' => $statusCounts['disposed'] ?? 0],
         ])->filter(fn ($row) => $row['total'] > 0)->values();
 
         $upcomingMaintenance = AssetMaintenance::with('asset')
@@ -108,12 +211,14 @@ class Dashboard extends Component
         return view('livewire.dashboard', [
             'stats' => $stats,
             'byCategory' => $byCategory,
-            'maxCategoryTotal' => $maxCategoryTotal,
             'statusBreakdown' => $statusBreakdown,
             'totalAssets' => $totalAssets,
             'upcomingMaintenance' => $upcomingMaintenance,
             'expiringWarranty' => $expiringWarranty,
             'activity' => $this->recentActivity(),
+            'categoryChart' => $this->categoryChartConfig($byCategory),
+            'statusChart' => $this->statusChartConfig($statusBreakdown),
+            'trendChart' => $this->activityTrendConfig(),
         ]);
     }
 }

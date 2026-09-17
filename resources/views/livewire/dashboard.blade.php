@@ -59,42 +59,34 @@
         @endforeach
     </div>
 
+    <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5 p-5 mb-6">
+        <h2 class="font-medium text-gray-800 mb-4">Check-In / Check-Out Activity (6 months)</h2>
+        @if ($totalAssets > 0)
+            <div class="h-64">
+                <canvas data-chart="{{ json_encode($trendChart) }}"></canvas>
+            </div>
+        @else
+            <p class="text-sm text-gray-400">No activity yet.</p>
+        @endif
+    </div>
+
     <div class="grid grid-cols-1 lg:grid-cols-3 gap-6 mb-6">
         <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5 p-5">
             <h2 class="font-medium text-gray-800 mb-4">Assets by Category</h2>
-            @forelse ($byCategory as $row)
-                <div class="mb-3 last:mb-0">
-                    <div class="flex justify-between text-sm mb-1">
-                        <span class="text-gray-600">{{ $row->category?->name ?? 'Uncategorized' }}</span>
-                        <span class="font-medium text-gray-800">{{ $row->total }}</span>
-                    </div>
-                    <div class="h-2 rounded-full bg-gray-100 overflow-hidden">
-                        <div class="h-full rounded-full bg-indigo-500" style="width: {{ round($row->total / $maxCategoryTotal * 100) }}%"></div>
-                    </div>
+            @if ($byCategory->isNotEmpty())
+                <div class="h-64">
+                    <canvas data-chart="{{ json_encode($categoryChart) }}"></canvas>
                 </div>
-            @empty
+            @else
                 <p class="text-sm text-gray-400">No assets yet.</p>
-            @endforelse
+            @endif
         </div>
 
         <div class="bg-white rounded-xl shadow-sm ring-1 ring-gray-900/5 p-5">
             <h2 class="font-medium text-gray-800 mb-4">Status Breakdown</h2>
             @if ($totalAssets > 0)
-                <div class="h-3 w-full rounded-full overflow-hidden flex mb-4">
-                    @foreach ($statusBreakdown as $row)
-                        <div class="{{ $row['color'] }} h-full" style="width: {{ round($row['total'] / $totalAssets * 100) }}%"></div>
-                    @endforeach
-                </div>
-                <div class="space-y-2">
-                    @foreach ($statusBreakdown as $row)
-                        <div class="flex items-center justify-between text-sm">
-                            <span class="flex items-center gap-2 text-gray-600">
-                                <span class="h-2.5 w-2.5 rounded-full {{ $row['color'] }}"></span>
-                                {{ $row['label'] }}
-                            </span>
-                            <span class="font-medium text-gray-800">{{ $row['total'] }} <span class="text-gray-400 font-normal">({{ round($row['total'] / $totalAssets * 100) }}%)</span></span>
-                        </div>
-                    @endforeach
+                <div class="h-64">
+                    <canvas data-chart="{{ json_encode($statusChart) }}"></canvas>
                 </div>
             @else
                 <p class="text-sm text-gray-400">No assets yet.</p>
